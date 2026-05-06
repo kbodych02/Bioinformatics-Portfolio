@@ -1,6 +1,6 @@
 ---
 title: "Transcriptomics Data Analysis - RNA-Seq EDA"
-author: "K"
+author: "Klaudia_Bodych"
 date: "2026-05-06"
 output: 
   html_document:
