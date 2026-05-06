@@ -1,0 +1,159 @@
+---
+title: "Transcriptomics Data Analysis - RNA-Seq EDA"
+author: "K"
+date: "2026-05-06"
+output: 
+  html_document:
+    theme: spacelab
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr")
+if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2")
+if (!requireNamespace("tidyr", quietly = TRUE)) install.packages("tidyr")
+if (!requireNamespace("pheatmap", quietly = TRUE)) install.packages("pheatmap")
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(pheatmap)
+```
+
+```{r}
+
+exprs_data <- read.csv("data.csv", row.names = 1)
+labels_data <- read.csv("labels.csv", row.names = 1)
+
+df <- cbind(labels_data, exprs_data)
+
+dim_df <- dim(df)
+print(paste("Liczba próbek (wierszy):", dim_df[1], "| Liczba genów/cech (kolumn):", dim_df[2]))
+
+df <- df[, 1:51] # Kolumna 1 to Class, kolumny 2-51 to geny
+str(df[, 1:10])
+
+head(df[, 1:6], 10)
+tail(df[, 1:6], 5)
+```
+
+
+```{r}
+df$Class <- as.factor(df$Class)
+
+colnames(df) <- toupper(colnames(df))
+
+df$GENE_1[c(10, 45, 120)] <- NA
+
+df_sorted <- df %>% arrange(desc(GENE_2))
+
+df_brca_high <- df %>% filter(CLASS == "BRCA" & GENE_3 > 5.0)
+```
+
+
+```{r}
+print(paste("Liczba NA przed imputacją:", sum(is.na(df$GENE_1))))
+
+mean_gene1 <- mean(df$GENE_1, na.rm = TRUE)
+df$GENE_1[is.na(df$GENE_1)] <- mean_gene1
+
+print(paste("Liczba NA po imputacji:", sum(is.na(df$GENE_1))))
+```
+
+
+```{r}
+eda_summary <- df %>%
+  filter(GENE_4 > 0) %>%                                 
+  select(CLASS, GENE_1, GENE_2, GENE_3) %>%             
+  mutate(RATIO_1_2 = GENE_1 / (GENE_2 + 0.01)) %>%       
+  group_by(CLASS) %>%                                  
+  summarise(                                            
+    AVG_GENE_1 = mean(GENE_1),
+    AVG_GENE_2 = mean(GENE_2),
+    SAMPLE_COUNT = n()
+  ) %>%
+  arrange(desc(AVG_GENE_1))                        
+
+print(eda_summary)
+```
+
+
+```{r}
+get_mode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+gene_stats <- list(
+  Minimum = min(df$GENE_5),
+  Maksimum = max(df$GENE_5),
+  Srednia = mean(df$GENE_5),
+  Mediana = median(df$GENE_5),
+  Moda = get_mode(round(df$GENE_5, 1)), 
+  Odchylenie_Standardowe = sd(df$GENE_5),
+  Kwartyle = quantile(df$GENE_5)
+)
+print(gene_stats)
+
+print("Tabela częstości próbek nowotworowych:")
+print(table(df$CLASS))
+```
+
+```{r}
+anova_result <- aov(GENE_1 ~ CLASS, data = df)
+summary(anova_result)
+```
+
+```{r}
+ggplot(df, aes(x = CLASS, y = GENE_1, fill = CLASS)) +
+  geom_boxplot(alpha = 0.8) +
+  theme_minimal() +
+  labs(title = "Rozkład ekspresji GENE_1 dla poszczególnych typów nowotworów",
+       x = "Typ nowotworu", y = "Poziom ekspresji (RNA-Seq)")
+
+ggplot(df, aes(x = GENE_2, fill = CLASS)) +
+  geom_density(alpha = 0.4) +
+  theme_minimal() +
+  labs(title = "Gęstość ekspresji GENE_2", x = "Ekspresja", y = "Gęstość")
+
+ggplot(df, aes(x = GENE_1, y = GENE_2, color = CLASS)) +
+  geom_point(alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Koekspresja: GENE_1 vs GENE_2", x = "GENE_1", y = "GENE_2")
+```  
+  
+```{r}  
+
+filter_by_variance <- function(data_matrix, min_sd) {
+  num_data <- data_matrix %>% select(where(is.numeric))
+  
+
+  highly_variable_genes <- num_data[, apply(num_data, 2, sd) > min_sd]
+  return(highly_variable_genes)
+}
+
+hvg_data <- filter_by_variance(df, 3.0)
+print(paste("Liczba genów o wysokiej zmienności (SD > 3.0):", ncol(hvg_data)))
+```
+
+
+```{r}
+
+num_genes <- min(20, ncol(hvg_data))
+heatmap_matrix <- as.matrix(hvg_data[1:40, 1:num_genes])
+
+rownames(heatmap_matrix) <- df$CLASS[1:40] 
+
+heatmap_matrix_scaled <- scale(heatmap_matrix)
+
+pheatmap(heatmap_matrix_scaled,
+         main = "Profil ekspresji wysoce zmiennych genów (Z-score)",
+         color = colorRampPalette(c("navy", "white", "firebrick3"))(50),
+         fontsize_row = 8,
+         fontsize_col = 8,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE)
+```
