@@ -1,0 +1,147 @@
+---
+title: "Breast Cancer Diagnostic - Exploratory Data Analysis"
+author: "Klaudia_Bodych"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    theme: flatly
+    toc: yes
+    toc_float: yes
+---
+
+Poniżej znajduje się konfiguracja początkowa (która jest ukryta w raporcie):
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+```{r}
+df <- read.csv("breast_cancer_data.csv")
+
+str(df)
+
+dim_df <- dim(df)
+print(paste("Liczba wierszy:", dim_df[1], "| Liczba kolumn:", dim_df[2]))
+
+head(df, 10)
+tail(df, 5)
+```
+
+```{r}
+df <- df %>% select(-id, -starts_with("X"))
+
+df$diagnosis <- as.factor(df$diagnosis)
+
+colnames(df) <- toupper(colnames(df))
+
+# Wygenerowanie 3 sztucznych braków danych (NA)
+df$RADIUS_MEAN[c(5, 15, 25)] <- NA
+
+df_sorted <- df %>% arrange(desc(AREA_MEAN))
+
+df_filtered <- df %>% filter(DIAGNOSIS == "M" & RADIUS_MEAN > 20)
+```
+
+```{r}
+print(paste("Liczba NA przed imputacją:", sum(is.na(df$RADIUS_MEAN))))
+
+mean_radius <- mean(df$RADIUS_MEAN, na.rm = TRUE)
+df$RADIUS_MEAN[is.na(df$RADIUS_MEAN)] <- mean_radius
+
+print(paste("Liczba NA po imputacji:", sum(is.na(df$RADIUS_MEAN))))
+```
+
+```{r}
+eda_summary <- df %>%
+  filter(TEXTURE_MEAN > 10) %>%                        
+  select(DIAGNOSIS, RADIUS_MEAN, AREA_MEAN) %>%   
+  mutate(AREA_TO_RADIUS_RATIO = AREA_MEAN / RADIUS_MEAN) %>% 
+  group_by(DIAGNOSIS) %>%                     
+  summarise(                       
+    AVG_RADIUS = mean(RADIUS_MEAN),
+    MAX_AREA = max(AREA_MEAN),
+    COUNT = n()
+  ) %>%
+  arrange(desc(AVG_RADIUS))                       
+
+print(eda_summary)
+```
+
+```{r}
+get_mode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+stats_area <- list(
+  Minimum = min(df$AREA_MEAN),
+  Maksimum = max(df$AREA_MEAN),
+  Srednia = mean(df$AREA_MEAN),
+  Mediana = median(df$AREA_MEAN),
+  Moda = get_mode(df$AREA_MEAN),
+  Odchylenie_Standardowe = sd(df$AREA_MEAN),
+  Kwartyle = quantile(df$AREA_MEAN)
+)
+print(stats_area)
+
+freq_table <- table(df$DIAGNOSIS)
+print("Tabela częstości (B - Benign, M - Malignant):")
+print(freq_table)
+```
+
+
+```{r}
+t_test_result <- t.test(RADIUS_MEAN ~ DIAGNOSIS, data = df)
+print(t_test_result)
+```
+
+```{r}
+ggplot(df, aes(x = DIAGNOSIS, y = AREA_MEAN, fill = DIAGNOSIS)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("B" = "#1b9e77", "M" = "#d95f02")) +
+  labs(title = "Rozkład powierzchni guza według diagnozy",
+       x = "Diagnoza", y = "Średnia Powierzchnia (Area Mean)") +
+  theme_minimal()
+
+ggplot(df, aes(x = RADIUS_MEAN, fill = DIAGNOSIS)) +
+  geom_density(alpha = 0.5) +
+  scale_fill_manual(values = c("B" = "#1b9e77", "M" = "#d95f02")) +
+  labs(title = "Wykres gęstości dla promienia guza",
+       x = "Średni Promień (Radius Mean)", y = "Gęstość") +
+  theme_minimal()
+
+ggplot(df, aes(x = RADIUS_MEAN, y = TEXTURE_MEAN, color = DIAGNOSIS)) +
+  geom_point(alpha = 0.6) +
+  scale_color_manual(values = c("B" = "#1b9e77", "M" = "#d95f02")) +
+  labs(title = "Zależność między promieniem a teksturą",
+       x = "Średni Promień", y = "Średnia Tekstura") +
+  theme_minimal()
+```
+  
+```{r}
+filter_by_threshold <- function(data, column_name, threshold) {
+  result <- data[data[[column_name]] > threshold, ]
+  return(result)
+}
+
+high_perimeter_data <- filter_by_threshold(df, "PERIMETER_MEAN", 100)
+print(paste("Liczba pacjentów z Perimeter Mean > 100:", nrow(high_perimeter_data)))
+```
+
+```{r}
+linear_model <- lm(AREA_MEAN ~ PERIMETER_MEAN, data = df)
+
+summary(linear_model)
+
+ggplot(df, aes(x = PERIMETER_MEAN, y = AREA_MEAN)) +
+  geom_point(alpha = 0.4, color = "darkblue") +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +
+  labs(title = "Regresja liniowa: Powierzchnia a Obwód guza",
+       x = "Obwód (Perimeter Mean)",
+       y = "Powierzchnia (Area Mean)") +
+  theme_minimal()
+```
+  
