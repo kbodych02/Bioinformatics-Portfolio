@@ -46,8 +46,3 @@ To quantitatively evaluate AlphaFold's structural prediction accuracy, the AI-ge
 
 ## 📝 General Conclusion
 The analysis of EGFR demonstrates that modern ML models are exceptionally accurate in predicting well-defined domains and standard cellular localizations. The integration of ML tools provides highly reliable predictions that closely mirror experimental data. DeepLoc and DeepGOPlus serve as robust computational screening tools, while AlphaFold provides near-experimental quality 3D coordinates (RMSD = 0.847 Å), proving its immense value for downstream bioinformatics applications.
-
-## 🚀 How to Reproduce
-* **Data:** Sequences and raw ML outputs (CSV/JSON) are located in the `/data` directory.
-* **Structures:** The experimental PDB (`1m17.pdb`) and AlphaFold (`AF-P00533.pdb`) files are in `/structures`.
-* **Scripts:** To reproduce the structural alignment and RMSD calculation, open PyMOL and run the script located at `scripts/align_EGFR.pml`.
